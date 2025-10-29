@@ -2,4 +2,158 @@ syntax = "proto3";
 
 package scheduler.v1;
 
-option go_package = "task_shelduler/api/gen/scheduler/v1;schedulerv1";
+option go_package = "/pkg/proto/v1;schedulerv1";
+
+import "google/protobuf/timestamp.proto";
+
+service SchedulerService {
+    rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+    rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+    rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);  
+    rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);  
+    rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);  
+    rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
+    rpc UpdateTaskStatus(UpdateTaskStatusRequest) returns (UpdateTaskStatusResponse);
+    rpc ReportAttempt(ReportAttemptRequest) returns (ReportAttemptResponse);
+}
+
+// tasks status
+enum TaskStatus {
+    TASK_STATUS_UNSPECIFIED = 0;
+    TASK_STATUS_DRAFT = 1;
+    TASK_STATUS_QUEUED = 2;
+    TASK_STATUS_RUNNING = 3;
+    TASK_STATUS_SUCCESS = 4;   
+    TASK_STATUS_FAILED = 5;
+    TASK_STATUS_CANCELLED = 6;
+}
+
+// attempt status
+enum AttemptStatus {
+    ATTEMPT_STATUS_UNSPECIFIED = 0;
+    ATTEMPT_STATUS_STARTED = 1;
+    ATTEMPT_STATUS_SUCCESS = 2;
+    ATTEMPT_STATUS_FAILED = 3;
+}
+
+// task
+message Task {
+    string id = 1;
+    string payload = 2;
+    TaskStatus status = 3;
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp updated_at = 5;
+    google.protobuf.Timestamp scheduled_at = 6;
+    int32 attempt = 7;
+    string last_error = 8;
+    string request_id = 9;
+}
+
+// schedule
+message Schedule {
+    string id = 1;
+    string cron = 2;
+    bool enabled = 3;
+    string payload = 4;
+    google.protobuf.Timestamp created_at = 5;
+}
+
+// attempt
+message Attempt {
+    string id = 1;
+    string task_id = 2;
+    google.protobuf.Timestamp started_at = 3;
+    google.protobuf.Timestamp finished_at = 4;
+    AttemptStatus status = 5;
+    string error = 6;
+}
+
+// create task request and response
+message CreateTaskRequest {
+    string payload = 1;
+    google.protobuf.Timestamp scheduled_at = 2;
+    string request_id = 3;
+}
+
+message CreateTaskResponse {
+    Task task = 1;
+}
+
+// get task request and response
+message GetTaskRequest {
+    string id = 1;
+}
+
+message GetTaskResponse {
+    Task task = 1;
+}
+
+// list tasks request and response
+message ListTasksRequest {
+    TaskStatus status = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+}
+
+message ListTasksResponse {
+    repeated Task tasks = 1;
+    int32 total = 2;
+}
+
+// cancel task request and response
+message CancelTaskRequest {
+    string id = 1;
+    string request_id = 2;
+}
+
+message CancelTaskResponse {
+    Task task = 1;
+}
+
+// update task status request and response
+message UpdateTaskStatusRequest {
+    string task_id = 1;
+    TaskStatus status = 2;
+    string request_id = 3;
+    string error = 4;
+}
+
+message UpdateTaskStatusResponse {
+    Task task = 1;
+}
+
+// create schedule request and response
+message CreateScheduleRequest {
+    string cron = 1;
+    string payload = 2;
+    string request_id = 3;
+    bool enabled = 4;
+}
+
+message CreateScheduleResponse {
+    Schedule schedule = 1;
+}
+
+// list schedules request and response
+message ListSchedulesRequest {
+    bool enabled = 1;
+    int32 limit = 2;
+    int32 offset = 3;
+}
+
+message ListSchedulesResponse {
+    repeated Schedule schedules = 1;
+    int32 total = 2;
+}
+
+// report attempt request and response
+message ReportAttemptRequest {
+    string task_id = 1;
+    AttemptStatus status = 2;
+    string error = 3;
+    string request_id = 4;
+}
+
+message ReportAttemptResponse {
+    Attempt attempt = 1;
+}
