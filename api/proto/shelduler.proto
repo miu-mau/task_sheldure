@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package scheduler.v1;
 
-option go_package = "/pkg/proto/v1;schedulerv1";
+option go_package = "task_shelduler/pkg/proto/v1;schedulerv1";
 
 import "google/protobuf/timestamp.proto";
 
@@ -47,6 +47,8 @@ message Task {
     int32 attempt = 7;
     string last_error = 8;
     string request_id = 9;
+
+    TaskRequirements requirements = 10;
 }
 
 // schedule
@@ -73,6 +75,8 @@ message CreateTaskRequest {
     string payload = 1;
     google.protobuf.Timestamp scheduled_at = 2;
     string request_id = 3;
+    TaskRequirements requirements = 4;
+    int32 priority = 5;
 }
 
 message CreateTaskResponse {
@@ -157,3 +161,12 @@ message ReportAttemptRequest {
 message ReportAttemptResponse {
     Attempt attempt = 1;
 }
+
+message TaskRequirements {
+    repeated string tags = 1; // capability tags required
+    string region = 2; // preferred/required region
+    double cpu = 3; // requested vCPU units
+    double memory = 4; // requested memory in MB
+    bool requires_gpu = 5;
+}
+

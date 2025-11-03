@@ -149,6 +149,7 @@ type Task struct {
 	Attempt       int32                  `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	LastError     string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	RequestId     string                 `protobuf:"bytes,9,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Requirements  *TaskRequirements      `protobuf:"bytes,10,opt,name=requirements,proto3" json:"requirements,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -244,6 +245,13 @@ func (x *Task) GetRequestId() string {
 		return x.RequestId
 	}
 	return ""
+}
+
+func (x *Task) GetRequirements() *TaskRequirements {
+	if x != nil {
+		return x.Requirements
+	}
+	return nil
 }
 
 // schedule
@@ -414,6 +422,8 @@ type CreateTaskRequest struct {
 	Payload       string                 `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 	ScheduledAt   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=scheduled_at,json=scheduledAt,proto3" json:"scheduled_at,omitempty"`
 	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Requirements  *TaskRequirements      `protobuf:"bytes,4,opt,name=requirements,proto3" json:"requirements,omitempty"`
+	Priority      int32                  `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -467,6 +477,20 @@ func (x *CreateTaskRequest) GetRequestId() string {
 		return x.RequestId
 	}
 	return ""
+}
+
+func (x *CreateTaskRequest) GetRequirements() *TaskRequirements {
+	if x != nil {
+		return x.Requirements
+	}
+	return nil
+}
+
+func (x *CreateTaskRequest) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
 }
 
 type CreateTaskResponse struct {
@@ -1264,11 +1288,87 @@ func (x *ReportAttemptResponse) GetAttempt() *Attempt {
 	return nil
 }
 
+type TaskRequirements struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tags          []string               `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty"`       // capability tags required
+	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`   // preferred/required region
+	Cpu           float64                `protobuf:"fixed64,3,opt,name=cpu,proto3" json:"cpu,omitempty"`       // requested vCPU units
+	Memory        float64                `protobuf:"fixed64,4,opt,name=memory,proto3" json:"memory,omitempty"` // requested memory in MB
+	RequiresGpu   bool                   `protobuf:"varint,5,opt,name=requires_gpu,json=requiresGpu,proto3" json:"requires_gpu,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskRequirements) Reset() {
+	*x = TaskRequirements{}
+	mi := &file_shelduler_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskRequirements) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskRequirements) ProtoMessage() {}
+
+func (x *TaskRequirements) ProtoReflect() protoreflect.Message {
+	mi := &file_shelduler_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskRequirements.ProtoReflect.Descriptor instead.
+func (*TaskRequirements) Descriptor() ([]byte, []int) {
+	return file_shelduler_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *TaskRequirements) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *TaskRequirements) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *TaskRequirements) GetCpu() float64 {
+	if x != nil {
+		return x.Cpu
+	}
+	return 0
+}
+
+func (x *TaskRequirements) GetMemory() float64 {
+	if x != nil {
+		return x.Memory
+	}
+	return 0
+}
+
+func (x *TaskRequirements) GetRequiresGpu() bool {
+	if x != nil {
+		return x.RequiresGpu
+	}
+	return false
+}
+
 var File_shelduler_proto protoreflect.FileDescriptor
 
 const file_shelduler_proto_rawDesc = "" +
 	"\n" +
-	"\x0fshelduler.proto\x12\fscheduler.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xef\x02\n" +
+	"\x0fshelduler.proto\x12\fscheduler.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb3\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\tR\apayload\x120\n" +
@@ -1282,7 +1382,9 @@ const file_shelduler_proto_rawDesc = "" +
 	"\n" +
 	"last_error\x18\b \x01(\tR\tlastError\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\t \x01(\tR\trequestId\"\x9d\x01\n" +
+	"request_id\x18\t \x01(\tR\trequestId\x12B\n" +
+	"\frequirements\x18\n" +
+	" \x01(\v2\x1e.scheduler.v1.TaskRequirementsR\frequirements\"\x9d\x01\n" +
 	"\bSchedule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x12\x18\n" +
@@ -1298,12 +1400,14 @@ const file_shelduler_proto_rawDesc = "" +
 	"\vfinished_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x123\n" +
 	"\x06status\x18\x05 \x01(\x0e2\x1b.scheduler.v1.AttemptStatusR\x06status\x12\x14\n" +
-	"\x05error\x18\x06 \x01(\tR\x05error\"\x8b\x01\n" +
+	"\x05error\x18\x06 \x01(\tR\x05error\"\xeb\x01\n" +
 	"\x11CreateTaskRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\tR\apayload\x12=\n" +
 	"\fscheduled_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vscheduledAt\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x03 \x01(\tR\trequestId\"<\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12B\n" +
+	"\frequirements\x18\x04 \x01(\v2\x1e.scheduler.v1.TaskRequirementsR\frequirements\x12\x1a\n" +
+	"\bpriority\x18\x05 \x01(\x05R\bpriority\"<\n" +
 	"\x12CreateTaskResponse\x12&\n" +
 	"\x04task\x18\x01 \x01(\v2\x12.scheduler.v1.TaskR\x04task\" \n" +
 	"\x0eGetTaskRequest\x12\x0e\n" +
@@ -1353,7 +1457,13 @@ const file_shelduler_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x04 \x01(\tR\trequestId\"H\n" +
 	"\x15ReportAttemptResponse\x12/\n" +
-	"\aattempt\x18\x01 \x01(\v2\x15.scheduler.v1.AttemptR\aattempt*\xbd\x01\n" +
+	"\aattempt\x18\x01 \x01(\v2\x15.scheduler.v1.AttemptR\aattempt\"\x8b\x01\n" +
+	"\x10TaskRequirements\x12\x12\n" +
+	"\x04tags\x18\x01 \x03(\tR\x04tags\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x10\n" +
+	"\x03cpu\x18\x03 \x01(\x01R\x03cpu\x12\x16\n" +
+	"\x06memory\x18\x04 \x01(\x01R\x06memory\x12!\n" +
+	"\frequires_gpu\x18\x05 \x01(\bR\vrequiresGpu*\xbd\x01\n" +
 	"\n" +
 	"TaskStatus\x12\x1b\n" +
 	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x15\n" +
@@ -1393,7 +1503,7 @@ func file_shelduler_proto_rawDescGZIP() []byte {
 }
 
 var file_shelduler_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_shelduler_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_shelduler_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_shelduler_proto_goTypes = []any{
 	(TaskStatus)(0),                  // 0: scheduler.v1.TaskStatus
 	(AttemptStatus)(0),               // 1: scheduler.v1.AttemptStatus
@@ -1416,50 +1526,53 @@ var file_shelduler_proto_goTypes = []any{
 	(*ListSchedulesResponse)(nil),    // 18: scheduler.v1.ListSchedulesResponse
 	(*ReportAttemptRequest)(nil),     // 19: scheduler.v1.ReportAttemptRequest
 	(*ReportAttemptResponse)(nil),    // 20: scheduler.v1.ReportAttemptResponse
-	(*timestamppb.Timestamp)(nil),    // 21: google.protobuf.Timestamp
+	(*TaskRequirements)(nil),         // 21: scheduler.v1.TaskRequirements
+	(*timestamppb.Timestamp)(nil),    // 22: google.protobuf.Timestamp
 }
 var file_shelduler_proto_depIdxs = []int32{
 	0,  // 0: scheduler.v1.Task.status:type_name -> scheduler.v1.TaskStatus
-	21, // 1: scheduler.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	21, // 2: scheduler.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
-	21, // 3: scheduler.v1.Task.scheduled_at:type_name -> google.protobuf.Timestamp
-	21, // 4: scheduler.v1.Schedule.created_at:type_name -> google.protobuf.Timestamp
-	21, // 5: scheduler.v1.Attempt.started_at:type_name -> google.protobuf.Timestamp
-	21, // 6: scheduler.v1.Attempt.finished_at:type_name -> google.protobuf.Timestamp
-	1,  // 7: scheduler.v1.Attempt.status:type_name -> scheduler.v1.AttemptStatus
-	21, // 8: scheduler.v1.CreateTaskRequest.scheduled_at:type_name -> google.protobuf.Timestamp
-	2,  // 9: scheduler.v1.CreateTaskResponse.task:type_name -> scheduler.v1.Task
-	2,  // 10: scheduler.v1.GetTaskResponse.task:type_name -> scheduler.v1.Task
-	0,  // 11: scheduler.v1.ListTasksRequest.status:type_name -> scheduler.v1.TaskStatus
-	2,  // 12: scheduler.v1.ListTasksResponse.tasks:type_name -> scheduler.v1.Task
-	2,  // 13: scheduler.v1.CancelTaskResponse.task:type_name -> scheduler.v1.Task
-	0,  // 14: scheduler.v1.UpdateTaskStatusRequest.status:type_name -> scheduler.v1.TaskStatus
-	2,  // 15: scheduler.v1.UpdateTaskStatusResponse.task:type_name -> scheduler.v1.Task
-	3,  // 16: scheduler.v1.CreateScheduleResponse.schedule:type_name -> scheduler.v1.Schedule
-	3,  // 17: scheduler.v1.ListSchedulesResponse.schedules:type_name -> scheduler.v1.Schedule
-	1,  // 18: scheduler.v1.ReportAttemptRequest.status:type_name -> scheduler.v1.AttemptStatus
-	4,  // 19: scheduler.v1.ReportAttemptResponse.attempt:type_name -> scheduler.v1.Attempt
-	5,  // 20: scheduler.v1.SchedulerService.CreateTask:input_type -> scheduler.v1.CreateTaskRequest
-	7,  // 21: scheduler.v1.SchedulerService.GetTask:input_type -> scheduler.v1.GetTaskRequest
-	9,  // 22: scheduler.v1.SchedulerService.ListTasks:input_type -> scheduler.v1.ListTasksRequest
-	11, // 23: scheduler.v1.SchedulerService.CancelTask:input_type -> scheduler.v1.CancelTaskRequest
-	15, // 24: scheduler.v1.SchedulerService.CreateSchedule:input_type -> scheduler.v1.CreateScheduleRequest
-	17, // 25: scheduler.v1.SchedulerService.ListSchedules:input_type -> scheduler.v1.ListSchedulesRequest
-	13, // 26: scheduler.v1.SchedulerService.UpdateTaskStatus:input_type -> scheduler.v1.UpdateTaskStatusRequest
-	19, // 27: scheduler.v1.SchedulerService.ReportAttempt:input_type -> scheduler.v1.ReportAttemptRequest
-	6,  // 28: scheduler.v1.SchedulerService.CreateTask:output_type -> scheduler.v1.CreateTaskResponse
-	8,  // 29: scheduler.v1.SchedulerService.GetTask:output_type -> scheduler.v1.GetTaskResponse
-	10, // 30: scheduler.v1.SchedulerService.ListTasks:output_type -> scheduler.v1.ListTasksResponse
-	12, // 31: scheduler.v1.SchedulerService.CancelTask:output_type -> scheduler.v1.CancelTaskResponse
-	16, // 32: scheduler.v1.SchedulerService.CreateSchedule:output_type -> scheduler.v1.CreateScheduleResponse
-	18, // 33: scheduler.v1.SchedulerService.ListSchedules:output_type -> scheduler.v1.ListSchedulesResponse
-	14, // 34: scheduler.v1.SchedulerService.UpdateTaskStatus:output_type -> scheduler.v1.UpdateTaskStatusResponse
-	20, // 35: scheduler.v1.SchedulerService.ReportAttempt:output_type -> scheduler.v1.ReportAttemptResponse
-	28, // [28:36] is the sub-list for method output_type
-	20, // [20:28] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	22, // 1: scheduler.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	22, // 2: scheduler.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 3: scheduler.v1.Task.scheduled_at:type_name -> google.protobuf.Timestamp
+	21, // 4: scheduler.v1.Task.requirements:type_name -> scheduler.v1.TaskRequirements
+	22, // 5: scheduler.v1.Schedule.created_at:type_name -> google.protobuf.Timestamp
+	22, // 6: scheduler.v1.Attempt.started_at:type_name -> google.protobuf.Timestamp
+	22, // 7: scheduler.v1.Attempt.finished_at:type_name -> google.protobuf.Timestamp
+	1,  // 8: scheduler.v1.Attempt.status:type_name -> scheduler.v1.AttemptStatus
+	22, // 9: scheduler.v1.CreateTaskRequest.scheduled_at:type_name -> google.protobuf.Timestamp
+	21, // 10: scheduler.v1.CreateTaskRequest.requirements:type_name -> scheduler.v1.TaskRequirements
+	2,  // 11: scheduler.v1.CreateTaskResponse.task:type_name -> scheduler.v1.Task
+	2,  // 12: scheduler.v1.GetTaskResponse.task:type_name -> scheduler.v1.Task
+	0,  // 13: scheduler.v1.ListTasksRequest.status:type_name -> scheduler.v1.TaskStatus
+	2,  // 14: scheduler.v1.ListTasksResponse.tasks:type_name -> scheduler.v1.Task
+	2,  // 15: scheduler.v1.CancelTaskResponse.task:type_name -> scheduler.v1.Task
+	0,  // 16: scheduler.v1.UpdateTaskStatusRequest.status:type_name -> scheduler.v1.TaskStatus
+	2,  // 17: scheduler.v1.UpdateTaskStatusResponse.task:type_name -> scheduler.v1.Task
+	3,  // 18: scheduler.v1.CreateScheduleResponse.schedule:type_name -> scheduler.v1.Schedule
+	3,  // 19: scheduler.v1.ListSchedulesResponse.schedules:type_name -> scheduler.v1.Schedule
+	1,  // 20: scheduler.v1.ReportAttemptRequest.status:type_name -> scheduler.v1.AttemptStatus
+	4,  // 21: scheduler.v1.ReportAttemptResponse.attempt:type_name -> scheduler.v1.Attempt
+	5,  // 22: scheduler.v1.SchedulerService.CreateTask:input_type -> scheduler.v1.CreateTaskRequest
+	7,  // 23: scheduler.v1.SchedulerService.GetTask:input_type -> scheduler.v1.GetTaskRequest
+	9,  // 24: scheduler.v1.SchedulerService.ListTasks:input_type -> scheduler.v1.ListTasksRequest
+	11, // 25: scheduler.v1.SchedulerService.CancelTask:input_type -> scheduler.v1.CancelTaskRequest
+	15, // 26: scheduler.v1.SchedulerService.CreateSchedule:input_type -> scheduler.v1.CreateScheduleRequest
+	17, // 27: scheduler.v1.SchedulerService.ListSchedules:input_type -> scheduler.v1.ListSchedulesRequest
+	13, // 28: scheduler.v1.SchedulerService.UpdateTaskStatus:input_type -> scheduler.v1.UpdateTaskStatusRequest
+	19, // 29: scheduler.v1.SchedulerService.ReportAttempt:input_type -> scheduler.v1.ReportAttemptRequest
+	6,  // 30: scheduler.v1.SchedulerService.CreateTask:output_type -> scheduler.v1.CreateTaskResponse
+	8,  // 31: scheduler.v1.SchedulerService.GetTask:output_type -> scheduler.v1.GetTaskResponse
+	10, // 32: scheduler.v1.SchedulerService.ListTasks:output_type -> scheduler.v1.ListTasksResponse
+	12, // 33: scheduler.v1.SchedulerService.CancelTask:output_type -> scheduler.v1.CancelTaskResponse
+	16, // 34: scheduler.v1.SchedulerService.CreateSchedule:output_type -> scheduler.v1.CreateScheduleResponse
+	18, // 35: scheduler.v1.SchedulerService.ListSchedules:output_type -> scheduler.v1.ListSchedulesResponse
+	14, // 36: scheduler.v1.SchedulerService.UpdateTaskStatus:output_type -> scheduler.v1.UpdateTaskStatusResponse
+	20, // 37: scheduler.v1.SchedulerService.ReportAttempt:output_type -> scheduler.v1.ReportAttemptResponse
+	30, // [30:38] is the sub-list for method output_type
+	22, // [22:30] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_shelduler_proto_init() }
@@ -1473,7 +1586,7 @@ func file_shelduler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_shelduler_proto_rawDesc), len(file_shelduler_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
