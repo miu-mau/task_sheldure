@@ -1,9 +1,11 @@
-.PHONY: proto generate install-deps clean
+.PHONY: proto generate install-deps clean migrate migrate-up migrate-down migrate-status migrate-create
 
 
 PROTO_DIR = api/proto
 GEN_DIR = pkg/proto/v1
 PROTO_FILE = $(PROTO_DIR)/shelduler.proto
+DB_PATH = internal/migrations/data/task_scheduler.db
+MIGRATIONS_DIR = internal/migrations
 
 
 install-deps:
@@ -43,4 +45,30 @@ check-protoc:
 
 all: check-protoc proto
 	@echo "✓ All done!"
+
+
+migrate:
+	@mkdir -p $$(dirname $(DB_PATH))
+	@go install github.com/pressly/goose/v3/cmd/goose@latest
+	@goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) up
+
+migrate-up: migrate
+	@echo "✓ Migrations applied"
+
+migrate-down:
+	@go install github.com/pressly/goose/v3/cmd/goose@latest
+	@goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) down
+
+migrate-status:
+	@go install github.com/pressly/goose/v3/cmd/goose@latest
+	@goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH) status
+
+migrate-create:
+	@if [ -z "$(NAME)" ]; then \
+		echo "ERROR: NAME is required. Usage: make migrate-create NAME=migration_name"; \
+		exit 1; \
+	fi
+	@go install github.com/pressly/goose/v3/cmd/goose@latest
+	@goose -dir $(MIGRATIONS_DIR) create $(NAME) sql
+	@echo "✓ Migration created: $(MIGRATIONS_DIR)/*_$(NAME).sql"
 
