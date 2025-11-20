@@ -150,6 +150,7 @@ type Task struct {
 	LastError     string                 `protobuf:"bytes,8,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	RequestId     string                 `protobuf:"bytes,9,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	Requirements  *TaskRequirements      `protobuf:"bytes,10,opt,name=requirements,proto3" json:"requirements,omitempty"`
+	Priority      int32                  `protobuf:"varint,11,opt,name=priority,proto3" json:"priority,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -252,6 +253,13 @@ func (x *Task) GetRequirements() *TaskRequirements {
 		return x.Requirements
 	}
 	return nil
+}
+
+func (x *Task) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
 }
 
 // schedule
@@ -1368,7 +1376,7 @@ var File_shelduler_proto protoreflect.FileDescriptor
 
 const file_shelduler_proto_rawDesc = "" +
 	"\n" +
-	"\x0fshelduler.proto\x12\fscheduler.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb3\x03\n" +
+	"\x0fshelduler.proto\x12\fscheduler.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcf\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\tR\apayload\x120\n" +
@@ -1384,7 +1392,8 @@ const file_shelduler_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\t \x01(\tR\trequestId\x12B\n" +
 	"\frequirements\x18\n" +
-	" \x01(\v2\x1e.scheduler.v1.TaskRequirementsR\frequirements\"\x9d\x01\n" +
+	" \x01(\v2\x1e.scheduler.v1.TaskRequirementsR\frequirements\x12\x1a\n" +
+	"\bpriority\x18\v \x01(\x05R\bpriority\"\x9d\x01\n" +
 	"\bSchedule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04cron\x18\x02 \x01(\tR\x04cron\x12\x18\n" +

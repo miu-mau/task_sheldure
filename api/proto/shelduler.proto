@@ -47,8 +47,8 @@ message Task {
     int32 attempt = 7;
     string last_error = 8;
     string request_id = 9;
-
     TaskRequirements requirements = 10;
+    int32 priority = 11;
 }
 
 // schedule
@@ -169,4 +169,3 @@ message TaskRequirements {
     double memory = 4; // requested memory in MB
     bool requires_gpu = 5;
 }
-
