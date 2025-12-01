@@ -14,7 +14,10 @@ type TaskRepository interface {
 	GetTask(id string) (*models.Task, error)
 	ListTasks(status models.TaskStatus, limit int, offset int) ([]*models.Task, error)
 	UpdateTaskStatus(id string, status models.TaskStatus) error
+	UpdateTaskStatusWithError(id string, status models.TaskStatus, errorMsg string) error
 	DeleteTask(id string) error
+	GetReadyTasks(limit int) ([]*models.Task, error)
+	FindByRequestID(requestID string) (*models.Task, error)
 }
 
 type taskRepository struct {
@@ -188,6 +191,109 @@ func (r *taskRepository) DeleteTask(id string) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *taskRepository) UpdateTaskStatusWithError(id string, status models.TaskStatus, errorMsg string) error {
+	result, err := r.db.Exec(`
+		UPDATE tasks
+		SET status_tasks = ?, updated_at = ?, last_error = ?
+		WHERE id_tasks = ?
+	`, status, time.Now().UTC(), errorMsg, id)
+	if err != nil {
+		return fmt.Errorf("failed to update task status with error: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check affected rows: %w", err)
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// GetReadyTasks возвращает задачи, готовые к выполнению (DRAFT статус и scheduled_at <= now)
+// с блокировкой для предотвращения дублирования
+func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
+	query := `
+		SELECT
+			id_tasks,
+			payload,
+			status_tasks,
+			created_at,
+			updated_at,
+			scheduled_at,
+			attempt,
+			last_error,
+			request_id,
+			requirements_tags,
+			requirements_region,
+			requirements_cpu,
+			requirements_memory,
+			requirements_requires_gpu,
+			priority_tasks
+		FROM tasks
+		WHERE status_tasks = ? AND scheduled_at <= ?
+		ORDER BY priority_tasks DESC, scheduled_at ASC
+		LIMIT ?
+	`
+
+	rows, err := r.db.Query(query, models.TaskStatusDraft, time.Now().UTC(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ready tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*models.Task
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return tasks, nil
+}
+
+// FindByRequestID находит задачу по request_id для идемпотентности
+func (r *taskRepository) FindByRequestID(requestID string) (*models.Task, error) {
+	row := r.db.QueryRow(`
+		SELECT
+			id_tasks,
+			payload,
+			status_tasks,
+			created_at,
+			updated_at,
+			scheduled_at,
+			attempt,
+			last_error,
+			request_id,
+			requirements_tags,
+			requirements_region,
+			requirements_cpu,
+			requirements_memory,
+			requirements_requires_gpu,
+			priority_tasks
+		FROM tasks
+		WHERE request_id = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, requestID)
+
+	task, err := scanTask(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Не найдено - это нормально
+		}
+		return nil, fmt.Errorf("failed to find task by request_id: %w", err)
+	}
+	return task, nil
 }
 
 func scanTask(scanner interface {
