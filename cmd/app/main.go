@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"task_shelduler/internal/database"
 	"task_shelduler/internal/models"
@@ -21,10 +23,11 @@ import (
 
 func main() {
 	var (
-		dbPath       = flag.String("db", "internal/migrations/data/task_scheduler.db", "path to SQLite database file")
-		port         = flag.Int("port", 50051, "gRPC server port")
-		kafkaBrokers = flag.String("kafka-brokers", "localhost:9092", "comma-separated list of Kafka brokers")
-		kafkaTopic   = flag.String("kafka-topic", "tasks", "Kafka topic for tasks")
+		dbPath          = flag.String("db", "internal/migrations/data/task_scheduler.db", "path to SQLite database file")
+		port            = flag.Int("port", 50051, "gRPC server port")
+		kafkaBrokers    = flag.String("kafka-brokers", "localhost:9092", "comma-separated list of Kafka brokers")
+		kafkaTopic      = flag.String("kafka-topic", "tasks", "Kafka topic for tasks")
+		kafkaPartitions = flag.Int("kafka-partitions", 10, "number of Kafka topic partitions (for load distribution across workers)")
 	)
 	flag.Parse()
 
@@ -44,7 +47,14 @@ func main() {
 	attemptRepo := repository.NewAttemptRepository(db)
 
 	// Kafka продюсер
-	brokers := []string{*kafkaBrokers}
+	brokers := parseBrokers(*kafkaBrokers)
+
+	// Создаём топик с несколькими партициями для распределения нагрузки между воркерами
+	// Kafka автоматически распределит партиции между всеми воркерами в consumer group
+	if err := queue.EnsureTopic(brokers, *kafkaTopic, *kafkaPartitions); err != nil {
+		log.Printf("Warning: failed to ensure topic exists (may already exist): %v", err)
+	}
+
 	producer := queue.NewKafkaProducer(brokers, *kafkaTopic)
 	defer producer.Close()
 
@@ -62,6 +72,9 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	schedulerv1.RegisterSchedulerServiceServer(grpcServer, schedulerSvc)
+
+	// Включаем reflection для работы с grpcurl
+	reflection.Register(grpcServer)
 
 	log.Printf("Scheduler gRPC server listening on :%d", *port)
 	if err := grpcServer.Serve(lis); err != nil {
@@ -89,7 +102,16 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 		return fmt.Errorf("get ready tasks: %w", err)
 	}
 
+	if len(readyTasks) == 0 {
+		// Нет готовых задач - это нормально, не логируем
+		return nil
+	}
+
+	log.Printf("Found %d ready task(s) to schedule", len(readyTasks))
+
 	for _, t := range readyTasks {
+		log.Printf("Scheduling task: %s (payload: %s)", t.ID, t.Payload)
+
 		payload := map[string]string{
 			"task_id":    t.ID,
 			"request_id": t.RequestID,
@@ -109,7 +131,17 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 			log.Printf("failed to update task %s status to QUEUED: %v", t.ID, err)
 			continue
 		}
+
+		log.Printf("Task %s successfully published to Kafka and marked as QUEUED", t.ID)
 	}
 
 	return nil
+}
+
+func parseBrokers(brokersStr string) []string {
+	brokers := strings.Split(brokersStr, ",")
+	for i := range brokers {
+		brokers[i] = strings.TrimSpace(brokers[i])
+	}
+	return brokers
 }

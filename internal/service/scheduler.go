@@ -32,13 +32,19 @@ func NewSchedulerService(
 func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.CreateTaskRequest) (*schedulerv1.CreateTaskResponse, error) {
 	now := time.Now().UTC()
 
+	// Если scheduled_at не указан, используем текущее время (задача готова к выполнению сразу)
+	scheduledAt := now
+	if req.GetScheduledAt() != nil {
+		scheduledAt = req.GetScheduledAt().AsTime()
+	}
+
 	task := &models.Task{
 		ID:          generateID(),
 		Payload:     req.GetPayload(),
 		Status:      models.TaskStatusDraft,
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		ScheduledAt: req.GetScheduledAt().AsTime(),
+		ScheduledAt: scheduledAt,
 		Attempt:     0,
 		LastError:   "",
 		RequestID:   req.GetRequestId(),

@@ -72,3 +72,25 @@ migrate-create:
 	@goose -dir $(MIGRATIONS_DIR) create $(NAME) sql
 	@echo "✓ Migration created: $(MIGRATIONS_DIR)/*_$(NAME).sql"
 
+# Docker Compose команды
+docker-up:
+	@echo "Starting Kafka and Zookeeper..."
+	@docker compose up -d
+	@echo "✓ Kafka is running on localhost:9092"
+
+docker-down:
+	@echo "Stopping Kafka and Zookeeper..."
+	@docker compose down
+	@echo "✓ Kafka stopped"
+
+docker-logs:
+	@docker compose logs -f kafka
+
+# Запуск всего стека
+run-all: docker-up
+	@echo "Waiting for Kafka to be ready..."
+	@sleep 5
+	@echo "✓ Ready! Now you can run:"
+	@echo "  Terminal 1: go run ./cmd/app"
+	@echo "  Terminal 2: go run ./cmd/worker"
+
