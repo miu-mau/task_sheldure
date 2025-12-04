@@ -19,10 +19,10 @@ func main() {
 	var (
 		grpcAddr = flag.String("addr", "localhost:50051", "gRPC server address")
 		command  = flag.String("cmd", "", "command: create, get, list")
+		workerID = flag.String("worker-id", "", "target worker ID for created tasks (e.g. worker1)")
 	)
 	flag.Parse()
 
-	// Подключение к gRPC серверу
 	conn, err := grpc.NewClient(*grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
@@ -34,7 +34,7 @@ func main() {
 
 	switch *command {
 	case "create":
-		createTask(ctx, client, flag.Args())
+		createTask(ctx, client, *workerID, flag.Args())
 	case "get":
 		getTask(ctx, client, flag.Args())
 	case "list":
@@ -45,21 +45,28 @@ func main() {
 	}
 }
 
-func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, args []string) {
+func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, workerIDFlag string, args []string) {
 	if len(args) < 1 {
-		log.Fatal("Usage: cli -cmd create <payload> [request_id]")
+		log.Fatal("Usage: cli -cmd create <payload> [worker_id] [request_id]")
 	}
 
 	payload := args[0]
+	workerID := workerIDFlag
 	requestID := fmt.Sprintf("req-%d", time.Now().Unix())
+
 	if len(args) >= 2 {
-		requestID = args[1]
+		workerID = args[1]
+	}
+
+	if len(args) >= 3 {
+		requestID = args[2]
 	}
 
 	req := &schedulerv1.CreateTaskRequest{
 		Payload:   payload,
 		RequestId: requestID,
-		// scheduled_at не указываем - будет использовано текущее время
+		WorkerId:  workerID,
+
 		ScheduledAt: timestamppb.Now(),
 	}
 
@@ -68,7 +75,6 @@ func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, 
 		log.Fatalf("Failed to create task: %v", err)
 	}
 
-	// Красивый вывод
 	task := resp.GetTask()
 	fmt.Println("✓ Task created successfully!")
 	fmt.Printf("  ID: %s\n", task.GetId())
@@ -153,13 +159,14 @@ func printUsage() {
 	fmt.Println("Task Scheduler CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id]")
+	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id] [-worker-group <group>]")
 	fmt.Println("  go run ./cmd/cli -cmd get <task_id>")
 	fmt.Println("  go run ./cmd/cli -cmd list [limit] [offset] [status]")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  go run ./cmd/cli -cmd create 'test task'")
 	fmt.Println("  go run ./cmd/cli -cmd create 'my task' 'req-123'")
+	fmt.Println("  go run ./cmd/cli -cmd create 'image resize' 'req-123' -worker-group image")
 	fmt.Println("  go run ./cmd/cli -cmd get abc-123-def-456")
 	fmt.Println("  go run ./cmd/cli -cmd list 10 0")
 	fmt.Println("  go run ./cmd/cli -cmd list 20 0 2  # status 2 = QUEUED")

@@ -49,6 +49,7 @@ message Task {
     string request_id = 9;
     TaskRequirements requirements = 10;
     int32 priority = 11;
+    string worker_id = 12;
 }
 
 // schedule
@@ -77,6 +78,7 @@ message CreateTaskRequest {
     string request_id = 3;
     TaskRequirements requirements = 4;
     int32 priority = 5;
+    string worker_id = 6;
 }
 
 message CreateTaskResponse {

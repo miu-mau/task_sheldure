@@ -47,9 +47,10 @@ func (r *taskRepository) CreateTask(task *models.Task) error {
 			requirements_cpu,
 			requirements_memory,
 			requirements_requires_gpu,
-			priority_tasks
+			priority_tasks,
+			worker_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		task.ID,
 		task.Payload,
@@ -66,6 +67,7 @@ func (r *taskRepository) CreateTask(task *models.Task) error {
 		reqMemory,
 		reqGPU,
 		task.Priority,
+		task.WorkerID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create task: %w", err)
@@ -90,7 +92,8 @@ func (r *taskRepository) GetTask(id string) (*models.Task, error) {
 			requirements_cpu,
 			requirements_memory,
 			requirements_requires_gpu,
-			priority_tasks
+			priority_tasks,
+			worker_id
 		FROM tasks
 		WHERE id_tasks = ?
 	`, id)
@@ -122,7 +125,8 @@ func (r *taskRepository) ListTasks(status models.TaskStatus, limit int, offset i
 			requirements_cpu,
 			requirements_memory,
 			requirements_requires_gpu,
-			priority_tasks
+			priority_tasks,
+			worker_id
 		FROM tasks
 	`
 
@@ -213,8 +217,6 @@ func (r *taskRepository) UpdateTaskStatusWithError(id string, status models.Task
 	return nil
 }
 
-// GetReadyTasks возвращает задачи, готовые к выполнению (DRAFT статус и scheduled_at <= now)
-// с блокировкой для предотвращения дублирования
 func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
 	query := `
 		SELECT
@@ -232,7 +234,8 @@ func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
 			requirements_cpu,
 			requirements_memory,
 			requirements_requires_gpu,
-			priority_tasks
+			priority_tasks,
+			worker_id
 		FROM tasks
 		WHERE status_tasks = ? AND scheduled_at <= ?
 		ORDER BY priority_tasks DESC, scheduled_at ASC
@@ -261,7 +264,6 @@ func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
 	return tasks, nil
 }
 
-// FindByRequestID находит задачу по request_id для идемпотентности
 func (r *taskRepository) FindByRequestID(requestID string) (*models.Task, error) {
 	row := r.db.QueryRow(`
 		SELECT
@@ -279,7 +281,8 @@ func (r *taskRepository) FindByRequestID(requestID string) (*models.Task, error)
 			requirements_cpu,
 			requirements_memory,
 			requirements_requires_gpu,
-			priority_tasks
+			priority_tasks,
+			worker_id
 		FROM tasks
 		WHERE request_id = ?
 		ORDER BY created_at DESC
@@ -326,6 +329,7 @@ func scanTask(scanner interface {
 		&requirementsMemory,
 		&requirementsRequiresGPU,
 		&task.Priority,
+		&task.WorkerID,
 	)
 	if err != nil {
 		return nil, err

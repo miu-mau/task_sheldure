@@ -43,6 +43,7 @@ type Task struct {
 	RequestID    string            `json:"request_id"`
 	Requirements *TaskRequirements `json:"requirements,omitempty"`
 	Priority     int32             `json:"priority,omitempty"`
+	WorkerID     string            `json:"worker_id,omitempty"`
 }
 
 type Schedule struct {

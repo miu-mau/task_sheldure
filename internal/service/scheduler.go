@@ -32,7 +32,6 @@ func NewSchedulerService(
 func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.CreateTaskRequest) (*schedulerv1.CreateTaskResponse, error) {
 	now := time.Now().UTC()
 
-	// Если scheduled_at не указан, используем текущее время (задача готова к выполнению сразу)
 	scheduledAt := now
 	if req.GetScheduledAt() != nil {
 		scheduledAt = req.GetScheduledAt().AsTime()
@@ -49,6 +48,7 @@ func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.Crea
 		LastError:   "",
 		RequestID:   req.GetRequestId(),
 		Priority:    req.GetPriority(),
+		WorkerID:    req.GetWorkerId(),
 	}
 
 	// requirements позже
@@ -153,7 +153,8 @@ func mapTaskToProto(t *models.Task) *schedulerv1.Task {
 		Attempt:     int32(t.Attempt),
 		LastError:   t.LastError,
 		RequestId:   t.RequestID,
-		// Requirements и Priority добавить позже
+		WorkerId:    t.WorkerID,
+		// Requirements и Priority можно добавить позже
 	}
 }
 

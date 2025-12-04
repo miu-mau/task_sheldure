@@ -49,8 +49,6 @@ func main() {
 	// Kafka продюсер
 	brokers := parseBrokers(*kafkaBrokers)
 
-	// Создаём топик с несколькими партициями для распределения нагрузки между воркерами
-	// Kafka автоматически распределит партиции между всеми воркерами в consumer group
 	if err := queue.EnsureTopic(brokers, *kafkaTopic, *kafkaPartitions); err != nil {
 		log.Printf("Warning: failed to ensure topic exists (may already exist): %v", err)
 	}
@@ -73,7 +71,6 @@ func main() {
 	grpcServer := grpc.NewServer()
 	schedulerv1.RegisterSchedulerServiceServer(grpcServer, schedulerSvc)
 
-	// Включаем reflection для работы с grpcurl
 	reflection.Register(grpcServer)
 
 	log.Printf("Scheduler gRPC server listening on :%d", *port)
@@ -115,6 +112,7 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 		payload := map[string]string{
 			"task_id":    t.ID,
 			"request_id": t.RequestID,
+			"worker_id":  t.WorkerID,
 		}
 		data, err := json.Marshal(payload)
 		if err != nil {

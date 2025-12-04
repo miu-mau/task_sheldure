@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     requirements_cpu REAL,
     requirements_memory REAL,
     requirements_requires_gpu INTEGER DEFAULT 0,
-    priority_tasks INTEGER DEFAULT 0
+    priority_tasks INTEGER DEFAULT 0,
+    worker_id TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_tasks);

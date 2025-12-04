@@ -47,6 +47,9 @@ all: check-protoc proto
 	@echo "✓ All done!"
 
 
+
+# ------------------------------------------------------------
+
 migrate:
 	@mkdir -p $$(dirname $(DB_PATH))
 	@go install github.com/pressly/goose/v3/cmd/goose@latest
@@ -72,7 +75,17 @@ migrate-create:
 	@goose -dir $(MIGRATIONS_DIR) create $(NAME) sql
 	@echo "✓ Migration created: $(MIGRATIONS_DIR)/*_$(NAME).sql"
 
-# Docker Compose команды
+migrate-reset:
+	@echo "Resetting SQLite database at $(DB_PATH)..."
+	@rm -f $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal
+	@make migrate
+	@echo "✓ Database reset and migrations reapplied"
+
+
+
+
+# ------------------------------------------------------------
+
 docker-up:
 	@echo "Starting Kafka and Zookeeper..."
 	@docker compose up -d
@@ -86,11 +99,11 @@ docker-down:
 docker-logs:
 	@docker compose logs -f kafka
 
-# Запуск всего стека
-run-all: docker-up
-	@echo "Waiting for Kafka to be ready..."
-	@sleep 5
-	@echo "✓ Ready! Now you can run:"
-	@echo "  Terminal 1: go run ./cmd/app"
-	@echo "  Terminal 2: go run ./cmd/worker"
+
+# run-all: docker-up
+# 	@echo "Waiting for Kafka to be ready..."
+# 	@sleep 5
+# 	@echo "✓ Ready! Now you can run:"
+# 	@echo "  Terminal 1: go run ./cmd/app"
+# 	@echo "  Terminal 2: go run ./cmd/worker"
 
