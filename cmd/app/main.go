@@ -57,7 +57,7 @@ func main() {
 	defer producer.Close()
 
 	// планировщик
-	go startSchedulerLoop(taskRepo, producer)
+	go startSchedulerLoop(taskRepo, producer, brokers)
 
 	// gRPC-сервис
 	schedulerSvc := service.NewSchedulerService(taskRepo, attemptRepo)
@@ -79,13 +79,13 @@ func main() {
 	}
 }
 
-func startSchedulerLoop(taskRepo repository.TaskRepository, producer *queue.KafkaProducer) {
+func startSchedulerLoop(taskRepo repository.TaskRepository, producer *queue.KafkaProducer, brokers []string) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		err := scheduleReadyTasks(ctx, taskRepo, producer)
+		err := scheduleReadyTasks(ctx, taskRepo, producer, brokers)
 		cancel()
 		if err != nil {
 			log.Printf("scheduler loop error: %v", err)
@@ -93,21 +93,24 @@ func startSchedulerLoop(taskRepo repository.TaskRepository, producer *queue.Kafk
 	}
 }
 
-func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository, producer *queue.KafkaProducer) error {
+func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository, producer *queue.KafkaProducer, brokers []string) error {
 	readyTasks, err := taskRepo.GetReadyTasks(10)
 	if err != nil {
 		return fmt.Errorf("get ready tasks: %w", err)
 	}
 
 	if len(readyTasks) == 0 {
-		// Нет готовых задач - это нормально, не логируем
+
 		return nil
 	}
 
 	log.Printf("Found %d ready task(s) to schedule", len(readyTasks))
 
+	baseTopic := "tasks"
+	createdTopics := make(map[string]bool)
+
 	for _, t := range readyTasks {
-		log.Printf("Scheduling task: %s (payload: %s)", t.ID, t.Payload)
+		log.Printf("Scheduling task: %s (payload: %s, worker_id: %s)", t.ID, t.Payload, t.WorkerID)
 
 		payload := map[string]string{
 			"task_id":    t.ID,
@@ -120,8 +123,26 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 			continue
 		}
 
-		if err := producer.PublishTask(ctx, []byte(t.ID), data); err != nil {
-			log.Printf("failed to publish task %s to Kafka: %v", t.ID, err)
+		var targetTopic string
+		partitionKey := t.ID
+
+		if t.WorkerID != "" {
+			targetTopic = fmt.Sprintf("%s-worker-%s", baseTopic, t.WorkerID)
+			partitionKey = t.WorkerID
+		} else {
+			targetTopic = baseTopic
+		}
+
+		if !createdTopics[targetTopic] {
+			if err := queue.EnsureTopic(brokers, targetTopic, 1); err != nil {
+				log.Printf("Warning: failed to ensure topic %s exists: %v", targetTopic, err)
+			} else {
+				createdTopics[targetTopic] = true
+			}
+		}
+
+		if err := producer.PublishTaskToTopic(ctx, targetTopic, []byte(partitionKey), data); err != nil {
+			log.Printf("failed to publish task %s to Kafka topic %s: %v", t.ID, targetTopic, err)
 			continue
 		}
 
@@ -130,7 +151,7 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 			continue
 		}
 
-		log.Printf("Task %s successfully published to Kafka and marked as QUEUED", t.ID)
+		log.Printf("Task %s successfully published to topic %s and marked as QUEUED", t.ID, targetTopic)
 	}
 
 	return nil

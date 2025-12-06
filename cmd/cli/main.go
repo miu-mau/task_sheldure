@@ -47,19 +47,30 @@ func main() {
 
 func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, workerIDFlag string, args []string) {
 	if len(args) < 1 {
-		log.Fatal("Usage: cli -cmd create <payload> [worker_id] [request_id]")
+		log.Fatal("Usage: cli -cmd create <payload> [request_id] [-worker-id <worker_id>]")
 	}
 
 	payload := args[0]
 	workerID := workerIDFlag
 	requestID := fmt.Sprintf("req-%d", time.Now().Unix())
 
-	if len(args) >= 2 {
-		workerID = args[1]
+	parsedArgs := []string{}
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-worker-id" || args[i] == "--worker-id" {
+			if i+1 < len(args) {
+
+				if workerID == "" {
+					workerID = args[i+1]
+				}
+				i++
+			}
+		} else {
+			parsedArgs = append(parsedArgs, args[i])
+		}
 	}
 
-	if len(args) >= 3 {
-		requestID = args[2]
+	if len(parsedArgs) >= 2 {
+		requestID = parsedArgs[1]
 	}
 
 	req := &schedulerv1.CreateTaskRequest{
@@ -81,6 +92,9 @@ func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, 
 	fmt.Printf("  Payload: %s\n", task.GetPayload())
 	fmt.Printf("  Status: %s\n", task.GetStatus().String())
 	fmt.Printf("  Request ID: %s\n", task.GetRequestId())
+	if task.GetWorkerId() != "" {
+		fmt.Printf("  Worker ID: %s\n", task.GetWorkerId())
+	}
 	fmt.Printf("  Created: %s\n", task.GetCreatedAt().AsTime().Format(time.RFC3339))
 }
 
@@ -159,14 +173,14 @@ func printUsage() {
 	fmt.Println("Task Scheduler CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id] [-worker-group <group>]")
+	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id] [-worker-id <worker_id>]")
 	fmt.Println("  go run ./cmd/cli -cmd get <task_id>")
 	fmt.Println("  go run ./cmd/cli -cmd list [limit] [offset] [status]")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  go run ./cmd/cli -cmd create 'test task'")
 	fmt.Println("  go run ./cmd/cli -cmd create 'my task' 'req-123'")
-	fmt.Println("  go run ./cmd/cli -cmd create 'image resize' 'req-123' -worker-group image")
+	fmt.Println("  go run ./cmd/cli -cmd create 'resize avatar' 'req-123' -worker-id worker1")
 	fmt.Println("  go run ./cmd/cli -cmd get abc-123-def-456")
 	fmt.Println("  go run ./cmd/cli -cmd list 10 0")
 	fmt.Println("  go run ./cmd/cli -cmd list 20 0 2  # status 2 = QUEUED")

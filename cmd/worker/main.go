@@ -25,31 +25,45 @@ func main() {
 		groupID      = flag.String("group-id", "worker-group", "Kafka consumer group ID")
 		grpcAddr     = flag.String("grpc-addr", "localhost:50051", "gRPC server address")
 		dbPath       = flag.String("db", "internal/migrations/data/task_scheduler.db", "path to SQLite database file")
-		workerID     = flag.String("worker-id", "", "unique worker ID (e.g. worker1, worker2). If empty, it will be assigned automatically.")
+		workerID     = flag.String("worker-id", "", "unique worker ID (e.g. worker1, worker2). If empty, worker will be registered in DB and get automatic ID")
 	)
 	flag.Parse()
 
-	if *workerID == "" {
-		db, err := database.OpenDB(*dbPath)
-		if err != nil {
-			log.Fatalf("Failed to open database for worker registration: %v", err)
-		}
-		defer db.Close()
+	db, err := database.OpenDB(*dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open database for worker registration: %v", err)
+	}
+	defer db.Close()
 
-		workerRepo := repository.NewWorkerRepository(db)
+	workerRepo := repository.NewWorkerRepository(db)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		id, err := workerRepo.RegisterWorker(ctx, "worker")
+	var actualWorkerID string
+	if *workerID != "" {
+
+		actualWorkerID = *workerID
+	} else {
+
+		id, err := workerRepo.RegisterWorker(registerCtx, "worker")
 		if err != nil {
 			log.Fatalf("Failed to register worker: %v", err)
 		}
-		*workerID = id
+		actualWorkerID = id
 	}
 
 	brokers := parseBrokers(*kafkaBrokers)
-	consumer := queue.NewKafkaConsumer(brokers, *kafkaTopic, *groupID)
+	baseTopic := *kafkaTopic
+	workerTopic := fmt.Sprintf("%s-worker-%s", baseTopic, actualWorkerID)
+
+	topics := []string{workerTopic, baseTopic}
+	actualGroupID := *groupID
+	if actualGroupID == "worker-group" || actualGroupID == "" {
+		actualGroupID = fmt.Sprintf("worker-group-%s", actualWorkerID)
+	}
+
+	consumer := queue.NewKafkaMultiConsumer(brokers, topics, actualGroupID)
 	defer consumer.Close()
 
 	conn, err := grpc.NewClient(*grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -60,7 +74,7 @@ func main() {
 
 	client := schedulerv1.NewSchedulerServiceClient(conn)
 
-	log.Printf("Worker started. ID=%s, topic=%s", *workerID, *kafkaTopic)
+	log.Printf("Worker started. ID=%s, topics=%v, consumer_group=%s", actualWorkerID, topics, actualGroupID)
 
 	ctx := context.Background()
 	for {
@@ -71,9 +85,11 @@ func main() {
 			continue
 		}
 
-		if err := processTask(ctx, client, msg.Value, *workerID); err != nil {
-			log.Printf("Failed to process task: %v", err)
+		log.Printf("Received message from topic: %s, partition: %d, offset: %d", msg.Topic, msg.Partition, msg.Offset)
 
+		err = processTask(ctx, client, msg.Value)
+		if err != nil {
+			log.Printf("Failed to process task: %v", err)
 			continue
 		}
 
@@ -81,8 +97,7 @@ func main() {
 	}
 }
 
-func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, data []byte, workerID string) error {
-
+func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, data []byte) error {
 	var payload map[string]string
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal task payload: %w", err)
@@ -90,18 +105,12 @@ func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient,
 
 	taskID := payload["task_id"]
 	requestID := payload["request_id"]
-	targetWorkerID := payload["worker_id"]
 
 	if taskID == "" {
 		return fmt.Errorf("task_id is empty")
 	}
 
-	if workerID != "" && targetWorkerID != "" && targetWorkerID != workerID {
-		log.Printf("Skip task %s: target_worker_id=%s, worker_id=%s", taskID, targetWorkerID, workerID)
-		return nil
-	}
-
-	log.Printf("Processing task: %s (request_id: %s)", taskID, requestID)
+	log.Printf("Processing task: %s", taskID)
 
 	_, err := client.UpdateTaskStatus(ctx, &schedulerv1.UpdateTaskStatusRequest{
 		TaskId:    taskID,
