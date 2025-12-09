@@ -1,0 +1,30 @@
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Go binaries
+/app
+/cmd/*/app
+/cmd/*/worker
+/cmd/*/cli
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+QUICKSTART.md
