@@ -10,9 +10,8 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// OpenDB открывает соединение с SQLite базой данных
 func OpenDB(dbPath string) (*sql.DB, error) {
-	// Создаем директорию для БД, если её нет
+
 	dir := filepath.Dir(dbPath)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -32,7 +31,6 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
-// RunMigrations выполняет миграции базы данных
 func RunMigrations(db *sql.DB, migrationsDir string) error {
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return fmt.Errorf("failed to set dialect: %w", err)

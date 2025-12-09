@@ -292,7 +292,7 @@ func (r *taskRepository) FindByRequestID(requestID string) (*models.Task, error)
 	task, err := scanTask(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // Не найдено - это нормально
+			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to find task by request_id: %w", err)
 	}

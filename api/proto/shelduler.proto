@@ -165,9 +165,9 @@ message ReportAttemptResponse {
 }
 
 message TaskRequirements {
-    repeated string tags = 1; // capability tags required
-    string region = 2; // preferred/required region
-    double cpu = 3; // requested vCPU units
-    double memory = 4; // requested memory in MB
+    repeated string tags = 1; 
+    string region = 2; 
+    double cpu = 3;
+    double memory = 4; 
     bool requires_gpu = 5;
 }

@@ -154,7 +154,7 @@ func mapTaskToProto(t *models.Task) *schedulerv1.Task {
 		LastError:   t.LastError,
 		RequestId:   t.RequestID,
 		WorkerId:    t.WorkerID,
-		// Requirements и Priority можно добавить позже
+		// Requirements и Priority добавить позже
 	}
 }
 
