@@ -18,6 +18,7 @@ type TaskRepository interface {
 	DeleteTask(id string) error
 	GetReadyTasks(limit int) ([]*models.Task, error)
 	FindByRequestID(requestID string) (*models.Task, error)
+	ResetTaskForRetry(id string, nextScheduledAt time.Time) error
 }
 
 type taskRepository struct {
@@ -31,6 +32,11 @@ func NewTaskRepository(db *sql.DB) TaskRepository {
 func (r *taskRepository) CreateTask(task *models.Task) error {
 	reqTags, reqRegion, reqCPU, reqMemory, reqGPU := encodeRequirements(task.Requirements)
 
+	maxAttempts := task.MaxAttempts
+	if maxAttempts == 0 {
+		maxAttempts = 3 // default
+	}
+
 	_, err := r.db.Exec(`
 		INSERT INTO tasks (
 			id_tasks,
@@ -40,6 +46,7 @@ func (r *taskRepository) CreateTask(task *models.Task) error {
 			updated_at,
 			scheduled_at,
 			attempt,
+			max_attempts,
 			last_error,
 			request_id,
 			requirements_tags,
@@ -50,7 +57,7 @@ func (r *taskRepository) CreateTask(task *models.Task) error {
 			priority_tasks,
 			worker_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		task.ID,
 		task.Payload,
@@ -59,6 +66,7 @@ func (r *taskRepository) CreateTask(task *models.Task) error {
 		task.UpdatedAt,
 		task.ScheduledAt,
 		task.Attempt,
+		maxAttempts,
 		task.LastError,
 		task.RequestID,
 		reqTags,
@@ -85,6 +93,7 @@ func (r *taskRepository) GetTask(id string) (*models.Task, error) {
 			updated_at,
 			scheduled_at,
 			attempt,
+			max_attempts,
 			last_error,
 			request_id,
 			requirements_tags,
@@ -118,6 +127,7 @@ func (r *taskRepository) ListTasks(status models.TaskStatus, limit int, offset i
 			updated_at,
 			scheduled_at,
 			attempt,
+			max_attempts,
 			last_error,
 			request_id,
 			requirements_tags,
@@ -227,6 +237,7 @@ func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
 			updated_at,
 			scheduled_at,
 			attempt,
+			max_attempts,
 			last_error,
 			request_id,
 			requirements_tags,
@@ -274,6 +285,7 @@ func (r *taskRepository) FindByRequestID(requestID string) (*models.Task, error)
 			updated_at,
 			scheduled_at,
 			attempt,
+			max_attempts,
 			last_error,
 			request_id,
 			requirements_tags,
@@ -321,6 +333,7 @@ func scanTask(scanner interface {
 		&task.UpdatedAt,
 		&task.ScheduledAt,
 		&task.Attempt,
+		&task.MaxAttempts,
 		&task.LastError,
 		&task.RequestID,
 		&tagsJSON,
@@ -396,4 +409,27 @@ func decodeRequirements(tags sql.NullString, region sql.NullString, cpu sql.Null
 	}
 
 	return req
+}
+
+func (r *taskRepository) ResetTaskForRetry(id string, nextScheduledAt time.Time) error {
+	result, err := r.db.Exec(`
+		UPDATE tasks
+		SET status_tasks = ?,
+		    attempt = attempt + 1,
+		    scheduled_at = ?,
+		    updated_at = ?
+		WHERE id_tasks = ?
+	`, models.TaskStatusDraft, nextScheduledAt, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("failed to reset task for retry: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check affected rows: %w", err)
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

@@ -116,6 +116,7 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 			"task_id":    t.ID,
 			"request_id": t.RequestID,
 			"worker_id":  t.WorkerID,
+			"payload":    t.Payload,
 		}
 		data, err := json.Marshal(payload)
 		if err != nil {

@@ -105,12 +105,13 @@ func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient,
 
 	taskID := payload["task_id"]
 	requestID := payload["request_id"]
+	taskPayload := payload["payload"]
 
 	if taskID == "" {
 		return fmt.Errorf("task_id is empty")
 	}
 
-	log.Printf("Processing task: %s", taskID)
+	log.Printf("Processing task: %s (payload: %s)", taskID, taskPayload)
 
 	_, err := client.UpdateTaskStatus(ctx, &schedulerv1.UpdateTaskStatusRequest{
 		TaskId:    taskID,
@@ -121,7 +122,7 @@ func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient,
 		return fmt.Errorf("failed to update task status to RUNNING: %w", err)
 	}
 
-	success := executeTask(taskID)
+	success := executeTask(taskID, taskPayload)
 
 	attemptStatus := schedulerv1.AttemptStatus_ATTEMPT_STATUS_SUCCESS
 	errorMsg := ""
@@ -143,13 +144,17 @@ func processTask(ctx context.Context, client schedulerv1.SchedulerServiceClient,
 	return nil
 }
 
-func executeTask(taskID string) bool {
-
+func executeTask(taskID string, taskPayload string) bool {
 	time.Sleep(100 * time.Millisecond)
 
-	log.Printf("Executing task: %s", taskID)
+	log.Printf("Executing task: %s (payload: %s)", taskID, taskPayload)
 
-	// демо возвращаем успех
+	// "fail" или "error" - автоматически считается задачей с ошибкой
+	payloadLower := strings.ToLower(taskPayload)
+	if strings.Contains(payloadLower, "fail") || strings.Contains(payloadLower, "error") {
+		log.Printf("Task %s failed: payload contains 'fail' or 'error'", taskID)
+		return false
+	}
 
 	return true
 }

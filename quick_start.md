@@ -31,4 +31,6 @@ go run ./cmd/cli -cmd create "for all workers2"
 go run ./cmd/cli -cmd create "for worker 1" -worker-id worker1
 
 go run ./cmd/cli -cmd create "for worker 2" -worker-id worker2
+
+go run ./cmd/cli -cmd create "fail" -worker-id worker1
 ```
