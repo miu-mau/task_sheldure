@@ -248,12 +248,12 @@ func (r *taskRepository) GetReadyTasks(limit int) ([]*models.Task, error) {
 			priority_tasks,
 			worker_id
 		FROM tasks
-		WHERE status_tasks = ? AND scheduled_at <= ?
+		WHERE (status_tasks = ? OR status_tasks = ?) AND scheduled_at <= ?
 		ORDER BY priority_tasks DESC, scheduled_at ASC
 		LIMIT ?
 	`
 
-	rows, err := r.db.Query(query, models.TaskStatusDraft, time.Now().UTC(), limit)
+	rows, err := r.db.Query(query, models.TaskStatusDraft, models.TaskStatusTime, time.Now().UTC(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ready tasks: %w", err)
 	}

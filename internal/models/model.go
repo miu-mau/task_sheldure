@@ -12,6 +12,7 @@ const (
 	TaskStatusSuccess     TaskStatus = 4
 	TaskStatusFailed      TaskStatus = 5
 	TaskStatusCancelled   TaskStatus = 6
+	TaskStatusTime        TaskStatus = 7
 )
 
 type AttemptStatus int32

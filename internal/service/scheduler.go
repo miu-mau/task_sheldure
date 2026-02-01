@@ -37,13 +37,17 @@ func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.Crea
 		scheduledAt = req.GetScheduledAt().AsTime()
 	}
 
+	status := models.TaskStatusDraft
+	if scheduledAt.After(now) {
+		status = models.TaskStatusTime
+	}
+
 	maxAttempts := 3
-	// добавить  max_attempts в proto
 
 	task := &models.Task{
 		ID:          generateID(),
 		Payload:     req.GetPayload(),
-		Status:      models.TaskStatusDraft,
+		Status:      status,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		ScheduledAt: scheduledAt,
@@ -54,8 +58,6 @@ func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.Crea
 		Priority:    req.GetPriority(),
 		WorkerID:    req.GetWorkerId(),
 	}
-
-	// requirements позже
 
 	if err := s.tasks.CreateTask(task); err != nil {
 		return nil, err
@@ -194,35 +196,28 @@ func generateID() string {
 	return uuid.NewString()
 }
 
-// handleTaskFailure обрабатывает ошибку выполнения задачи
-// Если количество попыток меньше максимума, возвращает задачу в статус Draft для повторной обработки
-// Если достигнут максимум попыток, устанавливает статус Failed
 func (s *SchedulerService) handleTaskFailure(taskID string, errorMsg string) {
 	task, err := s.tasks.GetTask(taskID)
 	if err != nil {
-		// Если не удалось получить задачу, просто устанавливаем статус Failed
+
 		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
 		return
 	}
 
-	// Сохраняем ошибку в задаче
 	_ = s.tasks.UpdateTaskStatusWithError(taskID, task.Status, errorMsg)
 
-	// Проверяем, не превышен ли лимит попыток
 	maxAttempts := task.MaxAttempts
 	if maxAttempts == 0 {
 		maxAttempts = 3 // default value
 	}
 
 	if task.Attempt >= maxAttempts {
-		// Достигнут максимум попыток, помечаем задачу как Failed
+
 		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
 		return
 	}
 
-	// Вычисляем задержку для повторной попытки (экспоненциальная задержка)
-	// Базовая задержка: 2^attempt секунд, минимум 5 секунд, максимум 300 секунд (5 минут)
-	delaySeconds := 1 << task.Attempt // 2^attempt
+	delaySeconds := 1 << task.Attempt
 	if delaySeconds < 5 {
 		delaySeconds = 5
 	}
@@ -232,9 +227,8 @@ func (s *SchedulerService) handleTaskFailure(taskID string, errorMsg string) {
 
 	nextScheduledAt := time.Now().UTC().Add(time.Duration(delaySeconds) * time.Second)
 
-	// Возвращаем задачу в статус Draft для повторной обработки
 	if err := s.tasks.ResetTaskForRetry(taskID, nextScheduledAt); err != nil {
-		// Если не удалось сбросить задачу, помечаем как Failed
+
 		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
 		return
 	}
