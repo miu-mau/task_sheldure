@@ -37,21 +37,27 @@ func (s *SchedulerService) CreateTask(ctx context.Context, req *schedulerv1.Crea
 		scheduledAt = req.GetScheduledAt().AsTime()
 	}
 
+	status := models.TaskStatusDraft
+	if scheduledAt.After(now) {
+		status = models.TaskStatusTime
+	}
+
+	maxAttempts := 3
+
 	task := &models.Task{
 		ID:          generateID(),
 		Payload:     req.GetPayload(),
-		Status:      models.TaskStatusDraft,
+		Status:      status,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		ScheduledAt: scheduledAt,
 		Attempt:     0,
+		MaxAttempts: maxAttempts,
 		LastError:   "",
 		RequestID:   req.GetRequestId(),
 		Priority:    req.GetPriority(),
 		WorkerID:    req.GetWorkerId(),
 	}
-
-	// requirements позже
 
 	if err := s.tasks.CreateTask(task); err != nil {
 		return nil, err
@@ -130,7 +136,7 @@ func (s *SchedulerService) ReportAttempt(ctx context.Context, req *schedulerv1.R
 	case schedulerv1.AttemptStatus_ATTEMPT_STATUS_SUCCESS:
 		_ = s.tasks.UpdateTaskStatusWithError(req.GetTaskId(), models.TaskStatusSuccess, "")
 	case schedulerv1.AttemptStatus_ATTEMPT_STATUS_FAILED:
-		_ = s.tasks.UpdateTaskStatusWithError(req.GetTaskId(), models.TaskStatusFailed, req.GetError())
+		s.handleTaskFailure(req.GetTaskId(), req.GetError())
 	}
 
 	return &schedulerv1.ReportAttemptResponse{
@@ -188,4 +194,42 @@ func ptrTime(t time.Time) *time.Time {
 
 func generateID() string {
 	return uuid.NewString()
+}
+
+func (s *SchedulerService) handleTaskFailure(taskID string, errorMsg string) {
+	task, err := s.tasks.GetTask(taskID)
+	if err != nil {
+
+		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
+		return
+	}
+
+	_ = s.tasks.UpdateTaskStatusWithError(taskID, task.Status, errorMsg)
+
+	maxAttempts := task.MaxAttempts
+	if maxAttempts == 0 {
+		maxAttempts = 3 // default value
+	}
+
+	if task.Attempt >= maxAttempts {
+
+		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
+		return
+	}
+
+	delaySeconds := 1 << task.Attempt
+	if delaySeconds < 5 {
+		delaySeconds = 5
+	}
+	if delaySeconds > 300 {
+		delaySeconds = 300
+	}
+
+	nextScheduledAt := time.Now().UTC().Add(time.Duration(delaySeconds) * time.Second)
+
+	if err := s.tasks.ResetTaskForRetry(taskID, nextScheduledAt); err != nil {
+
+		_ = s.tasks.UpdateTaskStatusWithError(taskID, models.TaskStatusFailed, errorMsg)
+		return
+	}
 }

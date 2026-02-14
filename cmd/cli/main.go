@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -20,6 +21,7 @@ func main() {
 		grpcAddr = flag.String("addr", "localhost:50051", "gRPC server address")
 		command  = flag.String("cmd", "", "command: create, get, list")
 		workerID = flag.String("worker-id", "", "target worker ID for created tasks (e.g. worker1)")
+		atTime   = flag.String("at", "", "run at specific time: \"19:00\", \"19:00:00\" or RFC3339 (e.g. 2025-02-01T19:00:00Z)")
 	)
 	flag.Parse()
 
@@ -34,7 +36,7 @@ func main() {
 
 	switch *command {
 	case "create":
-		createTask(ctx, client, *workerID, flag.Args())
+		createTask(ctx, client, *workerID, *atTime, flag.Args())
 	case "get":
 		getTask(ctx, client, flag.Args())
 	case "list":
@@ -45,40 +47,64 @@ func main() {
 	}
 }
 
-func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, workerIDFlag string, args []string) {
-	if len(args) < 1 {
-		log.Fatal("Usage: cli -cmd create <payload> [request_id] [-worker-id <worker_id>]")
+func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, workerIDFlag string, atTime string, args []string) {
+
+	positionals := collectCreatePositionals(args)
+
+	var payload, requestID string
+	switch {
+	case len(positionals) == 0:
+		log.Fatal("Error: payload is required. Usage: cli -cmd create <payload> [request_id] [-worker-id <worker_id>] [-at <time>]")
+	case positionals[0] == "create" && len(positionals) < 2:
+		log.Fatal("Error: payload is required. Usage: cli -cmd create <payload> [request_id] [-worker-id <worker_id>] [-at <time>]")
+	case positionals[0] == "create":
+		payload = positionals[1]
+		if len(positionals) >= 3 {
+			requestID = positionals[2]
+		}
+	default:
+
+		payload = positionals[0]
+		if len(positionals) >= 2 {
+			requestID = positionals[1]
+		}
+	}
+	if requestID == "" {
+		requestID = fmt.Sprintf("req-%d", time.Now().Unix())
 	}
 
-	payload := args[0]
 	workerID := workerIDFlag
-	requestID := fmt.Sprintf("req-%d", time.Now().Unix())
-
-	parsedArgs := []string{}
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-worker-id" || args[i] == "--worker-id" {
-			if i+1 < len(args) {
-
-				if workerID == "" {
-					workerID = args[i+1]
-				}
-				i++
-			}
-		} else {
-			parsedArgs = append(parsedArgs, args[i])
+		if (args[i] == "-worker-id" || args[i] == "--worker-id") && i+1 < len(args) && workerID == "" {
+			workerID = args[i+1]
+			break
 		}
 	}
 
-	if len(parsedArgs) >= 2 {
-		requestID = parsedArgs[1]
+	if atTime == "" {
+		for i := 0; i < len(args); i++ {
+			if args[i] == "-at" && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				atTime = args[i+1]
+				break
+			}
+		}
+	}
+
+	scheduledAt := time.Now().UTC()
+	if atTime != "" {
+		t, err := parseScheduledTime(atTime)
+		if err != nil {
+			log.Fatalf("Invalid -at time %q: %v (use 19:00, 19:00:00 or RFC3339)", atTime, err)
+		}
+		scheduledAt = t
+		fmt.Printf("Task will be sent to scheduler at: %s (status TIME)\n", scheduledAt.Format(time.RFC3339))
 	}
 
 	req := &schedulerv1.CreateTaskRequest{
-		Payload:   payload,
-		RequestId: requestID,
-		WorkerId:  workerID,
-
-		ScheduledAt: timestamppb.Now(),
+		Payload:     payload,
+		RequestId:   requestID,
+		WorkerId:    workerID,
+		ScheduledAt: timestamppb.New(scheduledAt),
 	}
 
 	resp, err := client.CreateTask(ctx, req)
@@ -96,6 +122,56 @@ func createTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, 
 		fmt.Printf("  Worker ID: %s\n", task.GetWorkerId())
 	}
 	fmt.Printf("  Created: %s\n", task.GetCreatedAt().AsTime().Format(time.RFC3339))
+	fmt.Printf("  Scheduled: %s\n", task.GetScheduledAt().AsTime().Format(time.RFC3339))
+}
+
+func collectCreatePositionals(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-at", "-worker-id", "--worker-id":
+			i++
+			continue
+		}
+		if strings.HasPrefix(args[i], "-") {
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out
+}
+
+func parseScheduledTime(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Now().UTC(), nil
+	}
+
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t.UTC(), nil
+	}
+	now := time.Now()
+	loc := now.Location()
+	var target time.Time
+	// "00:00:00"
+	if t, err := time.ParseInLocation("15:04:05", s, loc); err == nil {
+		target = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), 0, loc)
+	} else if t, err := time.ParseInLocation("15:04", s, loc); err == nil {
+		// "00:00"
+		target = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+	} else if t, err := time.ParseInLocation("15", s, loc); err == nil {
+		// "00"
+		target = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), 0, 0, 0, loc)
+	} else {
+		return time.Time{}, fmt.Errorf("unsupported format")
+	}
+	if !target.After(now) {
+		target = target.AddDate(0, 0, 1)
+	}
+	return target.UTC(), nil
 }
 
 func getTask(ctx context.Context, client schedulerv1.SchedulerServiceClient, args []string) {
@@ -173,12 +249,13 @@ func printUsage() {
 	fmt.Println("Task Scheduler CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id] [-worker-id <worker_id>]")
+	fmt.Println("  go run ./cmd/cli -cmd create <payload> [request_id] [-worker-id <worker_id>] [-at <time>]")
 	fmt.Println("  go run ./cmd/cli -cmd get <task_id>")
 	fmt.Println("  go run ./cmd/cli -cmd list [limit] [offset] [status]")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  go run ./cmd/cli -cmd create 'test task'")
+	fmt.Println("  go run ./cmd/cli -cmd create 'run at 19:00' -at 19:00")
 	fmt.Println("  go run ./cmd/cli -cmd create 'my task' 'req-123'")
 	fmt.Println("  go run ./cmd/cli -cmd create 'resize avatar' 'req-123' -worker-id worker1")
 	fmt.Println("  go run ./cmd/cli -cmd get abc-123-def-456")
@@ -187,10 +264,11 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Status values:")
 	fmt.Println("  0 = UNSPECIFIED")
-	fmt.Println("  1 = DRAFT")
+	fmt.Println("  1 = DRAFT   (готово к отправке сразу)")
 	fmt.Println("  2 = QUEUED")
 	fmt.Println("  3 = RUNNING")
 	fmt.Println("  4 = SUCCESS")
 	fmt.Println("  5 = FAILED")
 	fmt.Println("  6 = CANCELLED")
+	fmt.Println("  7 = TIME    (запланировано на время, отправится когда наступит scheduled_at)")
 }

@@ -23,11 +23,12 @@ import (
 
 func main() {
 	var (
-		dbPath          = flag.String("db", "internal/migrations/data/task_scheduler.db", "path to SQLite database file")
-		port            = flag.Int("port", 50051, "gRPC server port")
-		kafkaBrokers    = flag.String("kafka-brokers", "localhost:9092", "comma-separated list of Kafka brokers")
-		kafkaTopic      = flag.String("kafka-topic", "tasks", "Kafka topic for tasks")
-		kafkaPartitions = flag.Int("kafka-partitions", 10, "number of Kafka topic partitions (for load distribution across workers)")
+		dbPath            = flag.String("db", "internal/migrations/data/task_scheduler.db", "path to SQLite database file")
+		port              = flag.Int("port", 50051, "gRPC server port")
+		kafkaBrokers      = flag.String("kafka-brokers", "localhost:9092", "comma-separated list of Kafka brokers")
+		kafkaTopic        = flag.String("kafka-topic", "tasks", "Kafka topic for tasks")
+		kafkaPartitions   = flag.Int("kafka-partitions", 10, "number of Kafka topic partitions (for load distribution across workers)")
+		schedulerInterval = flag.Duration("scheduler-interval", 1*time.Second, "interval for checking ready tasks (e.g. 1s for precise run-at time)")
 	)
 	flag.Parse()
 
@@ -56,8 +57,7 @@ func main() {
 	producer := queue.NewKafkaProducer(brokers, *kafkaTopic)
 	defer producer.Close()
 
-	// планировщик
-	go startSchedulerLoop(taskRepo, producer, brokers)
+	go startSchedulerLoop(taskRepo, producer, brokers, *schedulerInterval)
 
 	// gRPC-сервис
 	schedulerSvc := service.NewSchedulerService(taskRepo, attemptRepo)
@@ -79,8 +79,8 @@ func main() {
 	}
 }
 
-func startSchedulerLoop(taskRepo repository.TaskRepository, producer *queue.KafkaProducer, brokers []string) {
-	ticker := time.NewTicker(5 * time.Second)
+func startSchedulerLoop(taskRepo repository.TaskRepository, producer *queue.KafkaProducer, brokers []string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -116,6 +116,7 @@ func scheduleReadyTasks(ctx context.Context, taskRepo repository.TaskRepository,
 			"task_id":    t.ID,
 			"request_id": t.RequestID,
 			"worker_id":  t.WorkerID,
+			"payload":    t.Payload,
 		}
 		data, err := json.Marshal(payload)
 		if err != nil {

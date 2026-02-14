@@ -12,6 +12,7 @@ const (
 	TaskStatusSuccess     TaskStatus = 4
 	TaskStatusFailed      TaskStatus = 5
 	TaskStatusCancelled   TaskStatus = 6
+	TaskStatusTime        TaskStatus = 7
 )
 
 type AttemptStatus int32
@@ -39,6 +40,7 @@ type Task struct {
 	UpdatedAt    time.Time         `json:"updated_at"`
 	ScheduledAt  time.Time         `json:"scheduled_at"`
 	Attempt      int               `json:"attempt"`
+	MaxAttempts  int               `json:"max_attempts"`
 	LastError    string            `json:"last_error"`
 	RequestID    string            `json:"request_id"`
 	Requirements *TaskRequirements `json:"requirements,omitempty"`

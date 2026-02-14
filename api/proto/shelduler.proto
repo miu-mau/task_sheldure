@@ -20,12 +20,13 @@ service SchedulerService {
 // tasks status
 enum TaskStatus {
     TASK_STATUS_UNSPECIFIED = 0;
-    TASK_STATUS_DRAFT = 1;
+    TASK_STATUS_DRAFT = 1;   
     TASK_STATUS_QUEUED = 2;
     TASK_STATUS_RUNNING = 3;
-    TASK_STATUS_SUCCESS = 4;   
+    TASK_STATUS_SUCCESS = 4;
     TASK_STATUS_FAILED = 5;
     TASK_STATUS_CANCELLED = 6;
+    TASK_STATUS_TIME = 7;    
 }
 
 // attempt status
